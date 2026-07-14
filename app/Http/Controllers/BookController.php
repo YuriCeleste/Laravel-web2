@@ -2,63 +2,112 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Support\Facades\Storage;
+use App\Models\Book;
+use App\Models\Author;
+use App\Models\Category;
+use App\Models\Publisher;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class BookController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
-        //
+        $books = Book::with('author')->paginate(20);
+        return view('books.index', compact('books'));
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
-        //
+        $authors = Author::all();
+        $categories = Category::all();
+        $publishers = Publisher::all();
+        return view('books.create', compact('authors', 'categories', 'publishers'));
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        //
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'pages' => 'required|integer',
+            'author_id' => 'required|exists:authors,id',
+            'category_id' => 'required|exists:categories,id',
+            'publisher_id' => 'required|exists:publishers,id',
+            'published_year' => 'nullable|integer',
+            'cover_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+        ]);
+
+        $data = $request->all();
+
+        if ($request->hasFile('cover_image')) {
+            $path = $request->file('cover_image')->store('covers', 'public');
+            $data['cover_image'] = $path;
+        }
+
+        Book::create($data);
+
+        return redirect()->route('books.index')
+            ->with('success', 'Livro criado com sucesso.');
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
+    public function show($id)
     {
-        //
+        $book = Book::with(['author', 'category', 'publisher', 'users'])->findOrFail($id);
+        $users = User::all();
+        return view('books.show', compact('book', 'users'));
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
+    public function edit($id)
     {
-        //
+        $book = Book::findOrFail($id);
+        $authors = Author::all();
+        $categories = Category::all();
+        $publishers = Publisher::all();
+        return view('books.edit', compact('book', 'authors', 'categories', 'publishers'));
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
+    public function update(Request $request, $id)
     {
-        //
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'pages' => 'required|integer',
+            'author_id' => 'required|exists:authors,id',
+            'category_id' => 'required|exists:categories,id',
+            'publisher_id' => 'required|exists:publishers,id',
+            'published_year' => 'nullable|integer',
+            'cover_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+        ]);
+
+        $book = Book::findOrFail($id);
+        $data = $request->all();
+
+        if ($request->hasFile('cover_image')) {
+            // Deletar imagem antiga
+            if ($book->cover_image) {
+                Storage::disk('public')->delete($book->cover_image);
+            }
+            $path = $request->file('cover_image')->store('covers', 'public');
+            $data['cover_image'] = $path;
+        }
+
+        $book->update($data);
+
+        return redirect()->route('books.index')
+            ->with('success', 'Livro atualizado com sucesso.');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
+    public function destroy($id)
     {
-        //
+        $book = Book::findOrFail($id);
+
+        if ($book->cover_image) {
+            Storage::disk('public')->delete($book->cover_image);
+        }
+
+        $book->delete();
+
+        return redirect()->route('books.index')
+            ->with('success', 'Livro excluído com sucesso.');
     }
 }
